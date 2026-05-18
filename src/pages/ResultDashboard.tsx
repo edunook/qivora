@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { GlassCard } from '../components/ui/GlassCard'
 import { PremiumButton } from '../components/ui/PremiumButton'
 import { 
   Calendar, XCircle, ArrowLeft, Printer, ShieldCheck, 
-  HelpCircle, Loader2, Award, Sparkles, Clock, ChevronRight,
-  TrendingUp, Download, Eye, Share2, Star
+  HelpCircle, Loader2, Clock,
+  TrendingUp, Download, Star
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import axios from 'axios'
@@ -65,6 +65,7 @@ interface ResultData {
       downloadableResult?: boolean
       printableResult?: boolean
       leaderboardVisibility?: boolean
+      violationLimit?: number
       questions: Array<{
         text: string
         options: string[]
@@ -272,7 +273,6 @@ export const ResultDashboard = () => {
   const activeLayout = exam.resultLayoutStyle || 'Grid'
 
   // Visibility triggers based on configuration settings
-  const shouldShowRank = exam.showRank !== undefined ? exam.showRank : true
   const shouldShowPercentage = exam.showPercentage !== undefined ? exam.showPercentage : true
   const shouldShowCorrectAnswers = exam.showCorrectAnswers !== undefined ? exam.showCorrectAnswers : true
   const shouldShowWrongAnswers = exam.showWrongAnswers !== undefined ? exam.showWrongAnswers : true

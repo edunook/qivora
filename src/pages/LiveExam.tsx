@@ -1,9 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { GlassCard } from '../components/ui/GlassCard'
 import { PremiumButton } from '../components/ui/PremiumButton'
-import { ShieldCheck, Clock, ChevronLeft, ChevronRight, AlertCircle, Loader2, CheckCircle2, Trophy, ArrowRight, Eye } from 'lucide-react'
+import { 
+  ShieldCheck, Clock, ChevronLeft, ChevronRight, AlertCircle, 
+  Loader2, CheckCircle2, Trophy, ArrowRight, Play, BookOpen, Award,
+  XCircle
+} from 'lucide-react'
 import { useExamStore } from '../store/examStore'
 import { useAuthStore } from '../store/authStore'
 import axios from 'axios'
@@ -14,15 +18,18 @@ export const LiveExam = () => {
   const navigate = useNavigate()
   const { currentExam, getExamById, isLoading } = useExamStore()
 
-  // Navigation and hierarchical tracking states
-  const [activeSubjectIndex, setActiveSubjectIndex] = useState(0)
-  const [activeQuestionIndex, setActiveQuestionIndex] = useState(0) // question index within the active subject
+  // Lobby and attempt tracking states
+  const [existingResults, setExistingResults] = useState<any[]>([])
+  const [isLobbyLoading, setIsLobbyLoading] = useState(true)
+  const [activeAttemptSubject, setActiveAttemptSubject] = useState<any | null>(null)
+  
+  // Navigation tracking inside the active subject attempt
+  const [activeQuestionIndex, setActiveQuestionIndex] = useState(0)
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [markedForReview, setMarkedForReview] = useState<Record<number, boolean>>({})
   
-  // Timers: Combined overall timer and section-specific timers
+  // Active Timer State
   const [timeLeft, setTimeLeft] = useState(0)
-  const [subjectTimeLeft, setSubjectTimeLeft] = useState<Record<number, number>>({})
   const [examFinished, setExamFinished] = useState(false)
 
   // Anti-Cheat Secure States
@@ -33,35 +40,38 @@ export const LiveExam = () => {
   const [isCheatedState, setIsCheatedState] = useState(false)
   const [createdResultId, setCreatedResultId] = useState('')
 
-  // Fetch exam data
+  // Fetch user attempts for this exam
+  const fetchExistingResults = useCallback(async () => {
+    if (!id) return
+    try {
+      const token = useAuthStore.getState().user?.token
+      const config = {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+      const response = await axios.get(`${API_BASE_URL}/api/results/exam/${id}`, config)
+      setExistingResults(response.data)
+    } catch (error) {
+      console.error('Failed to fetch existing results:', error)
+    } finally {
+      setIsLobbyLoading(false)
+    }
+  }, [id])
+
+  // Fetch exam structure and user attempts on mount
   useEffect(() => {
     if (id) {
       getExamById(id)
+      fetchExistingResults()
     }
-  }, [id, getExamById])
+  }, [id, getExamById, fetchExistingResults])
 
-  // Initialize timers when exam loads
+  // Countdown timer tick for the active subject session
   useEffect(() => {
-    if (currentExam) {
-      setTimeLeft(currentExam.duration * 60) // Convert total minutes to seconds
-
-      // Initialize subject-specific timers
-      if (currentExam.subjects && currentExam.subjects.length > 0) {
-        const timers: Record<number, number> = {}
-        currentExam.subjects.forEach((s: any, idx: number) => {
-          timers[idx] = (s.duration || 15) * 60 // minutes to seconds
-        })
-        setSubjectTimeLeft(timers)
-      }
-    }
-  }, [currentExam])
-
-  // Countdown clock tick
-  useEffect(() => {
-    if (timeLeft <= 0 || examFinished || !isFullscreenActive) return
+    if (timeLeft <= 0 || examFinished || !isFullscreenActive || !activeAttemptSubject) return
 
     const timer = setInterval(() => {
-      // 1. Decrement overall exam timer
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer)
@@ -70,39 +80,14 @@ export const LiveExam = () => {
         }
         return prev - 1
       })
-
-      // 2. Decrement currently active subject section timer
-      if (currentExam?.subjects && currentExam.subjects.length > 0) {
-        setSubjectTimeLeft((prevTimers) => {
-          const currentSectionTime = prevTimers[activeSubjectIndex]
-          const updatedTimers = { ...prevTimers }
-
-          if (currentSectionTime <= 1) {
-            updatedTimers[activeSubjectIndex] = 0
-            // Auto lock active section and transition to next subject branch
-            if (activeSubjectIndex < currentExam.subjects.length - 1) {
-              setActiveSubjectIndex((prevIdx) => prevIdx + 1)
-              setActiveQuestionIndex(0)
-            } else {
-              // Out of sections, trigger final submission
-              clearInterval(timer)
-              handleFinish()
-            }
-          } else {
-            updatedTimers[activeSubjectIndex] = currentSectionTime - 1
-          }
-
-          return updatedTimers
-        })
-      }
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [timeLeft, examFinished, isFullscreenActive, activeSubjectIndex, currentExam])
+  }, [timeLeft, examFinished, isFullscreenActive, activeAttemptSubject])
 
   // Secure Mode Listeners (Anti-Cheat)
   useEffect(() => {
-    if (!isFullscreenActive || examFinished || !currentExam) return
+    if (!isFullscreenActive || examFinished || !currentExam || !activeAttemptSubject) return
 
     const handleCopyPaste = (e: Event) => {
       e.preventDefault()
@@ -129,7 +114,6 @@ export const LiveExam = () => {
       }
     }
 
-    // Dynamic bindings based on configuration settings
     if (currentExam.disableCopy || currentExam.disablePaste) {
       document.addEventListener('copy', handleCopyPaste)
       document.addEventListener('cut', handleCopyPaste)
@@ -157,7 +141,7 @@ export const LiveExam = () => {
       window.removeEventListener('blur', handleBlur)
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }
-  }, [isFullscreenActive, examFinished, currentExam])
+  }, [isFullscreenActive, examFinished, currentExam, activeAttemptSubject])
 
   const triggerViolation = (type: string) => {
     if (!currentExam) return
@@ -193,27 +177,31 @@ export const LiveExam = () => {
     return `${m}:${s}`
   }, [])
 
-  // Maps nested indices into a consistent flat indices for REST payload
-  const getFlatQuestionIndex = (subjIdx: number, qIdx: number) => {
-    if (!currentExam || !currentExam.subjects) return qIdx
-    let count = 0
-    for (let i = 0; i < subjIdx; i++) {
-      count += currentExam.subjects[i].questions.length
-    }
-    return count + qIdx
+  const selectAnswer = (qIdx: number, optionIndex: number) => {
+    setAnswers({ ...answers, [qIdx]: optionIndex })
   }
 
-  const selectAnswer = (flatQIdx: number, optionIndex: number) => {
-    setAnswers({ ...answers, [flatQIdx]: optionIndex })
+  const toggleMarkForReview = (qIdx: number) => {
+    setMarkedForReview({ ...markedForReview, [qIdx]: !markedForReview[qIdx] })
   }
 
-  const toggleMarkForReview = (flatQIdx: number) => {
-    setMarkedForReview({ ...markedForReview, [flatQIdx]: !markedForReview[flatQIdx] })
+  const startSubjectAttempt = (subj: any) => {
+    setActiveAttemptSubject(subj)
+    setActiveQuestionIndex(0)
+    setAnswers({})
+    setMarkedForReview({})
+    setTimeLeft((subj.duration || 15) * 60)
+    setViolationsCount(0)
+    setIsCheatedState(false)
+    setShowViolationWarning(false)
+    setExamFinished(false)
+    enterSecureMode()
   }
 
   const handleForceSubmit = async (violations: number) => {
-    if (!currentExam) return
-    const timeTaken = currentExam.duration * 60 - timeLeft
+    if (!currentExam || !activeAttemptSubject) return
+    const durationLimit = (activeAttemptSubject.duration || 15) * 60
+    const timeTaken = durationLimit - timeLeft
 
     try {
       const token = useAuthStore.getState().user?.token
@@ -224,6 +212,7 @@ export const LiveExam = () => {
       }
       const response = await axios.post(`${API_BASE_URL}/api/results`, {
         examId: currentExam._id,
+        subjectName: activeAttemptSubject.name,
         answers,
         timeTaken,
         cheated: true,
@@ -238,8 +227,9 @@ export const LiveExam = () => {
   }
 
   const handleFinish = async () => {
-    if (!currentExam) return
-    const timeTaken = currentExam.duration * 60 - timeLeft
+    if (!currentExam || !activeAttemptSubject) return
+    const durationLimit = (activeAttemptSubject.duration || 15) * 60
+    const timeTaken = durationLimit - timeLeft
 
     try {
       const token = useAuthStore.getState().user?.token
@@ -250,6 +240,7 @@ export const LiveExam = () => {
       }
       const response = await axios.post(`${API_BASE_URL}/api/results`, {
         examId: currentExam._id,
+        subjectName: activeAttemptSubject.name,
         answers,
         timeTaken,
         cheated: isCheatedState,
@@ -267,7 +258,40 @@ export const LiveExam = () => {
     setExamFinished(true)
   }
 
-  if (isLoading || !currentExam) {
+  const handleReturnToLobby = () => {
+    setActiveAttemptSubject(null)
+    setExamFinished(false)
+    setCreatedResultId('')
+    setIsFullscreenActive(false)
+    fetchExistingResults()
+  }
+
+  // Helper to determine the schedule window status of a subject section
+  const getSubjectTimingStatus = (subj: any) => {
+    if (!subj.startDate) {
+      return { status: 'active', label: 'Available', isLocked: false }
+    }
+
+    const now = new Date()
+    const startDateTime = new Date(`${subj.startDate}T${subj.startTime || '00:00'}`)
+    const endDateTime = subj.endDate ? new Date(`${subj.endDate}T${subj.endTime || '23:59'}`) : null
+
+    if (now < startDateTime) {
+      return { 
+        status: 'locked', 
+        label: `Locked until ${startDateTime.toLocaleDateString()} ${startDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+        isLocked: true 
+      }
+    }
+
+    if (endDateTime && now > endDateTime) {
+      return { status: 'expired', label: 'Closed / Expired', isLocked: true }
+    }
+
+    return { status: 'active', label: 'Available', isLocked: false }
+  }
+
+  if (isLoading || isLobbyLoading || !currentExam) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center">
         <Loader2 className="w-12 h-12 animate-spin text-indigo-500" />
@@ -275,113 +299,185 @@ export const LiveExam = () => {
     )
   }
 
-  // Pre-Exam Gatekeeper Launch Screen
-  if (!isFullscreenActive && !examFinished) {
+  // Get subjects array (fallback to a single virtual subject if the exam is flat)
+  const subjects = currentExam.subjects && currentExam.subjects.length > 0
+    ? currentExam.subjects
+    : [{
+        name: currentExam.subject || 'General Section',
+        description: 'Comprehensive subject evaluation questions',
+        duration: currentExam.duration || 30,
+        passingMarks: 5,
+        totalMarks: 10,
+        questions: currentExam.questions || [],
+        instructions: currentExam.instructions || ''
+      }]
+
+  // LOBBY VIEW: Choose which subject modules to attempt
+  if (!activeAttemptSubject && !examFinished) {
     return (
       <motion.div
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="container mx-auto px-4 py-12 flex items-center justify-center min-h-[85vh]"
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="container mx-auto px-4 py-12 max-w-5xl"
       >
-        <GlassCard className="max-w-2xl w-full p-6 sm:p-10 border-indigo-500/20 relative overflow-hidden" hoverGlow={true}>
-          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -z-10" />
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl -z-10" />
+        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] p-8 sm:p-12 backdrop-blur-2xl shadow-2xl mb-8">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl -z-10" />
+          <div className="absolute bottom-0 left-0 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl -z-10" />
 
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center mx-auto mb-4 animate-pulse">
-              <ShieldCheck className="w-8 h-8 text-indigo-400" />
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 border-b border-white/10 pb-8">
+            <div>
+              <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-3 py-1 rounded-full">
+                Exam Lobby
+              </span>
+              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mt-3 mb-2">
+                {currentExam.title}
+              </h1>
+              <p className="text-gray-400 text-sm max-w-2xl">{currentExam.description}</p>
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-white mb-2">Secure CBT Gatekeeper</h1>
-            <p className="text-gray-400 text-sm">Locking exam dashboard for: <span className="text-indigo-400 font-semibold">{currentExam.title}</span></p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 mb-8">
-            <div className="p-4 rounded-xl bg-white/5 border border-white/5 text-center">
-              <div className="text-xs text-indigo-300 uppercase tracking-widest font-bold">Total Duration</div>
-              <div className="text-xl font-bold text-white mt-1">{currentExam.duration} Mins</div>
-            </div>
-            <div className="p-4 rounded-xl bg-white/5 border border-white/5 text-center">
-              <div className="text-xs text-indigo-300 uppercase tracking-widest font-bold">Subjects / Branches</div>
-              <div className="text-xl font-bold text-white mt-1">
-                {currentExam.subjects && currentExam.subjects.length > 0 ? currentExam.subjects.length : 1}
-              </div>
-            </div>
-          </div>
-
-          {currentExam.subjects && currentExam.subjects.length > 0 && (
-            <div className="mb-6 p-4 bg-white/5 rounded-xl border border-white/5 text-left">
-              <h4 className="text-xs font-bold text-indigo-300 uppercase tracking-wider mb-2">Subject Timer Breakdowns</h4>
-              <div className="grid grid-cols-2 gap-2 text-xs text-gray-300">
-                {currentExam.subjects.map((s: any, idx: number) => (
-                  <div key={idx} className="flex justify-between items-center bg-white/5 px-3 py-1.5 rounded-lg">
-                    <span className="font-semibold">{s.name}</span>
-                    <span className="text-indigo-400 font-bold">{s.duration} mins</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-4 mb-8 text-left">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider border-b border-white/10 pb-2">Academic Integrity Protocols</h3>
             
-            <div className="flex gap-3 items-start">
-              <div className="w-5 h-5 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center shrink-0 mt-0.5 text-xs text-indigo-400 font-bold">1</div>
-              <div>
-                <p className="text-sm font-medium text-white/90">Mandatory Fullscreen Lock</p>
-                <p className="text-xs text-gray-400">Exiting fullscreen mode counts as an immediate exam proctoring violation.</p>
-              </div>
-            </div>
-
-            <div className="flex gap-3 items-start">
-              <div className="w-5 h-5 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center shrink-0 mt-0.5 text-xs text-indigo-400 font-bold">2</div>
-              <div>
-                <p className="text-sm font-medium text-white/90">Zero Tab Switching Allowed</p>
-                <p className="text-xs text-gray-400">Any window blurs, focus losses, or browser tab switches will be logged automatically.</p>
-              </div>
-            </div>
-
-            {currentExam.negativeMarking && (
-              <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 flex gap-3 items-center">
-                <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
-                <p className="text-xs text-rose-300">
-                  <span className="font-bold">Negative Marking Active:</span> Wrong answers deduct <span className="font-extrabold">-{currentExam.negativeMarkValue || 0.25} marks</span>.
-                </p>
-              </div>
-            )}
+            <Link to="/dashboard">
+              <PremiumButton variant="outline" className="text-xs">
+                Back to Dashboard
+              </PremiumButton>
+            </Link>
           </div>
 
-          <PremiumButton onClick={enterSecureMode} className="w-full py-4 bg-indigo-600 text-white font-bold text-sm tracking-wide shadow-[0_0_25px_rgba(99,102,241,0.3)] hover:bg-indigo-500 flex justify-center items-center gap-2">
-            Launch Locked Session <ArrowRight className="w-4 h-4" />
-          </PremiumButton>
-        </GlassCard>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/5 text-center">
+              <span className="text-[10px] text-indigo-300 uppercase tracking-widest font-bold block mb-1">Total Subjects</span>
+              <span className="text-2xl font-bold text-white">{subjects.length}</span>
+            </div>
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/5 text-center">
+              <span className="text-[10px] text-indigo-300 uppercase tracking-widest font-bold block mb-1">Attempt Completed</span>
+              <span className="text-2xl font-bold text-green-400">
+                {subjects.filter(s => existingResults.some(r => r.subjectName === s.name)).length} / {subjects.length}
+              </span>
+            </div>
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/5 text-center">
+              <span className="text-[10px] text-indigo-300 uppercase tracking-widest font-bold block mb-1">Security Level</span>
+              <span className="text-2xl font-bold text-indigo-400">Secure CBT</span>
+            </div>
+          </div>
+
+          {/* List of Subjects / Modular Exams */}
+          <div className="space-y-6">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-white/5 pb-3">
+              <BookOpen className="w-5 h-5 text-indigo-400" /> Subject-Wise Exam Modules
+            </h3>
+            
+            <div className="grid gap-4">
+              {subjects.length === 0 || (subjects.length === 1 && (!subjects[0].questions || subjects[0].questions.length === 0) && !currentExam.subjects?.length) ? (
+                <div className="p-8 text-center bg-white/5 border border-white/5 rounded-2xl">
+                  <BookOpen className="w-10 h-10 text-gray-500 mx-auto mb-3" />
+                  <p className="text-gray-400 text-sm font-semibold">No subject modules have been published for this exam yet.</p>
+                  <p className="text-xs text-gray-500 mt-1">Please wait for the exam publisher to configure the subjects.</p>
+                </div>
+              ) : (
+                subjects.map((subj: any, idx: number) => {
+                  const completedResult = existingResults.find(r => r.subjectName === subj.name)
+                  const timing = getSubjectTimingStatus(subj)
+                
+                return (
+                  <motion.div
+                    key={idx}
+                    whileHover={{ scale: 1.01 }}
+                    className={`p-6 rounded-2xl border transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-6 ${
+                      completedResult 
+                        ? 'bg-emerald-500/5 border-emerald-500/20' 
+                        : timing.isLocked
+                          ? 'bg-white/[0.01] border-white/5 opacity-60'
+                          : 'bg-white/5 border-white/10 hover:border-white/20'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center gap-3 mb-2 text-left">
+                        <h4 className="text-lg font-bold text-white">{subj.name}</h4>
+                        {completedResult ? (
+                          <span className="text-[10px] font-extrabold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" /> Completed
+                          </span>
+                        ) : timing.status === 'locked' ? (
+                          <span className="text-[10px] font-extrabold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 border border-amber-500/20">
+                            <ShieldCheck className="w-3 h-3" /> {timing.label}
+                          </span>
+                        ) : timing.status === 'expired' ? (
+                          <span className="text-[10px] font-extrabold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 border border-rose-500/20">
+                            <XCircle className="w-3 h-3" /> {timing.label}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-extrabold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <Clock className="w-3 h-3 animate-pulse" /> Available
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-400 mb-3 text-left">{subj.description || 'Module section assessment'}</p>
+                      
+                      <div className="flex flex-wrap gap-4 text-xs text-gray-400 text-left">
+                        <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {subj.duration} mins</span>
+                        <span className="flex items-center gap-1"><Award className="w-3.5 h-3.5" /> {subj.questions?.length || 0} Questions</span>
+                        {subj.startDate && (
+                          <span className="text-[10px] text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                            Schedule: {subj.startDate} {subj.startTime || '00:00'} to {subj.endDate || subj.startDate} {subj.endTime || '23:59'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="w-full md:w-auto shrink-0 flex items-center gap-3">
+                      {completedResult ? (
+                        <>
+                          <div className="text-right hidden sm:block pr-2">
+                            <div className="text-xs text-gray-400">Grade Score</div>
+                            <div className="text-sm font-bold text-emerald-400">
+                              {completedResult.percentage !== null ? `${completedResult.percentage}%` : 'Graded'}
+                            </div>
+                          </div>
+                          <Link to={`/result/${completedResult._id}`}>
+                            <PremiumButton variant="outline" className="w-full md:w-auto py-2 text-xs">
+                              View Result
+                            </PremiumButton>
+                          </Link>
+                        </>
+                      ) : (
+                        <PremiumButton
+                          disabled={timing.isLocked}
+                          onClick={() => startSubjectAttempt(subj)}
+                          className={`w-full md:w-auto py-3 px-6 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                            timing.isLocked
+                              ? 'bg-white/5 border border-white/10 text-gray-500 cursor-not-allowed shadow-none'
+                              : 'bg-indigo-600 hover:bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.2)]'
+                          }`}
+                        >
+                          {timing.status === 'locked' ? (
+                            <>Locked <ShieldCheck className="w-3.5 h-3.5" /></>
+                          ) : timing.status === 'expired' ? (
+                            <>Closed <XCircle className="w-3.5 h-3.5" /></>
+                          ) : (
+                            <>Attempt Module <Play className="w-3.5 h-3.5" /></>
+                          )}
+                        </PremiumButton>
+                      )}
+                    </div>
+                  </motion.div>
+                )
+              }))}
+            </div>
+          </div>
+        </div>
+
+        {/* Security / integrity protocol footer */}
+        <div className="p-6 rounded-2xl border border-white/5 bg-white/[0.01] text-left space-y-4">
+          <h4 className="text-xs font-extrabold uppercase tracking-widest text-indigo-400">Academic Integrity Protocols</h4>
+          <p className="text-xs text-gray-400 leading-relaxed">
+            Qivora CBT utilizes advanced full-screen lock and system blur proctoring. Starting any subject module will trigger a secure proctor window. Ensure your environment remains distraction-free. Exiting full-screen or switching browser tabs logs proctoring violations and will auto-submit the exam under strike limits.
+          </p>
+        </div>
       </motion.div>
     )
   }
 
-  // Determine current active question
-  const activeSubject = currentExam.subjects && currentExam.subjects.length > 0 
-    ? currentExam.subjects[activeSubjectIndex]
-    : { name: currentExam.subject || 'General', questions: currentExam.questions, instructions: '' }
-
-  const activeQuestion = activeSubject?.questions && activeSubject.questions.length > 0
-    ? activeSubject.questions[activeQuestionIndex]
-    : null
-
-  const flatIndex = getFlatQuestionIndex(activeSubjectIndex, activeQuestionIndex)
-  const isQuestionAnswered = answers[flatIndex] !== undefined
-  const isQuestionMarked = !!markedForReview[flatIndex]
-
-  // Calculated stats for progress bar
-  const totalExamQuestionsCount = currentExam.subjects && currentExam.subjects.length > 0
-    ? currentExam.subjects.reduce((acc: number, curr: any) => acc + curr.questions.length, 0)
-    : currentExam.questions.length
-
-  const currentOverallQuestionIndex = getFlatQuestionIndex(activeSubjectIndex, activeQuestionIndex)
-  const progressPercent = ((currentOverallQuestionIndex + 1) / totalExamQuestionsCount) * 100
-
-  // Post-Exam Finished Score Summary Gate
-  if (examFinished) {
+  // POST-EXAM SUBJECT FINISHED SUMMARY SCREEN
+  if (examFinished && activeAttemptSubject) {
     return (
       <motion.div
         initial={{ opacity: 0 }}
@@ -393,36 +489,46 @@ export const LiveExam = () => {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-            className="w-22 h-22 rounded-2xl bg-indigo-500/20 flex items-center justify-center mx-auto mb-8 border border-indigo-500/30"
+            className="w-20 h-20 rounded-2xl bg-indigo-500/20 flex items-center justify-center mx-auto mb-8 border border-indigo-500/30"
           >
-            <Trophy className="w-12 h-12 text-indigo-400" />
+            <Trophy className="w-10 h-10 text-indigo-400" />
           </motion.div>
           
-          <h2 className="text-4xl font-extrabold text-white mb-2">Exam Successfully Submitted!</h2>
+          <h2 className="text-3xl font-extrabold text-white mb-2">{activeAttemptSubject.name} Submitted!</h2>
           <p className="text-gray-400 mb-8">{currentExam.title}</p>
 
           <GlassCard className="p-8 mb-8" hoverGlow={false}>
-            <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 className="h-8 w-8 text-emerald-400" />
+            <div className="w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="h-7 w-7 text-emerald-400" />
             </div>
-            <p className="text-white font-bold text-lg">Your responses are locked securely.</p>
+            <p className="text-white font-bold text-base">Your responses are locked securely.</p>
             <p className="text-xs text-gray-400 mt-2">
-              The grading calculation engine has updated your results records on the secure server.
+              The grading calculation engine has successfully submitted your modular results. You can now attempt remaining modules or view details.
             </p>
           </GlassCard>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <PremiumButton variant="outline" onClick={() => navigate('/explore')}>
-              Back to Explore
+            <PremiumButton variant="outline" onClick={handleReturnToLobby}>
+              Return to Exam Lobby
             </PremiumButton>
-            <PremiumButton onClick={() => navigate(createdResultId ? `/result/${createdResultId}` : '/dashboard')}>
-              View Detailed Scorecard <ArrowRight className="h-4 w-4 ml-1" />
-            </PremiumButton>
+            {createdResultId && (
+              <PremiumButton onClick={() => navigate(`/result/${createdResultId}`)}>
+                View Scorecard <ArrowRight className="h-4 w-4 ml-1" />
+              </PremiumButton>
+            )}
           </div>
         </div>
       </motion.div>
     )
   }
+
+  // ACTIVE PROCTORED EXAM QUESTION ATTEMPT SCREEN
+  const activeQuestion = activeAttemptSubject.questions && activeAttemptSubject.questions.length > 0
+    ? activeAttemptSubject.questions[activeQuestionIndex]
+    : null
+
+  const isQuestionMarked = !!markedForReview[activeQuestionIndex]
+  const progressPercent = ((activeQuestionIndex + 1) / activeAttemptSubject.questions.length) * 100
 
   return (
     <motion.div
@@ -442,25 +548,17 @@ export const LiveExam = () => {
               </div>
               <div className="h-6 w-[1px] bg-white/10" />
               <div className="text-xs sm:text-sm text-gray-300">
-                Active Subject: <span className="font-bold text-white uppercase">{activeSubject.name}</span>
+                Module: <span className="font-bold text-white uppercase">{activeAttemptSubject.name}</span>
               </div>
             </div>
 
             <div className="flex items-center gap-4">
-              {/* Active Subject Section Timer */}
-              {currentExam.subjects && currentExam.subjects.length > 0 && (
-                <div className="flex items-center gap-2 font-mono px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs sm:text-sm">
-                  <span className="text-[10px] text-gray-500 uppercase tracking-wider font-sans">Section Clock:</span>
-                  <span className="font-bold">{formatTime(subjectTimeLeft[activeSubjectIndex] || 0)}</span>
-                </div>
-              )}
-
-              {/* Combined Overall Timer */}
+              {/* Active Subject Module Countdown Clock */}
               <div className={`flex items-center gap-2 font-mono px-3 py-1.5 rounded-lg border text-xs sm:text-sm ${
                 timeLeft <= 60 ? 'text-rose-400 bg-rose-500/10 border-rose-500/20 animate-pulse' : 'text-purple-300 bg-purple-500/10 border-purple-500/20'
               }`}>
                 <Clock className="w-4 h-4 shrink-0" />
-                <span className="text-[10px] text-gray-500 uppercase tracking-wider font-sans">Total Clock:</span>
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider font-sans">Module Timer:</span>
                 <span className="font-bold">{formatTime(timeLeft)}</span>
               </div>
 
@@ -469,45 +567,12 @@ export const LiveExam = () => {
                 onClick={handleFinish}
                 className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-all"
               >
-                Finish Exam
+                Finish Module
               </button>
             </div>
           </div>
 
-          {/* Subject Navigation Tabs Bar */}
-          {currentExam.subjects && currentExam.subjects.length > 1 && (
-            <div className="bg-white/[0.02] border-b border-white/5 px-6 py-3.5 flex items-center gap-3 overflow-x-auto">
-              <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold shrink-0">Assessments:</span>
-              {currentExam.subjects.map((subj: any, sIdx: number) => {
-                const isCurrent = activeSubjectIndex === sIdx
-                const isCompleted = activeSubjectIndex > sIdx
-                return (
-                  <button
-                    key={sIdx}
-                    disabled={isCompleted}
-                    onClick={() => {
-                      setActiveSubjectIndex(sIdx)
-                      setActiveQuestionIndex(0)
-                    }}
-                    className={`text-xs px-4 py-2 rounded-xl border transition-all shrink-0 flex items-center gap-2 ${
-                      isCurrent
-                        ? 'bg-indigo-600/20 border-indigo-500 text-white font-bold shadow-[0_0_15px_rgba(99,102,241,0.2)]'
-                        : isCompleted
-                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 line-through cursor-not-allowed opacity-50'
-                          : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    <span>{subj.name}</span>
-                    <span className="text-[10px] bg-white/15 px-1.5 py-0.5 rounded text-gray-300 font-mono">
-                      {sIdx === activeSubjectIndex ? formatTime(subjectTimeLeft[sIdx] || 0) : `${subj.duration}m`}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          )}
-
-          {/* Combined Progress Bar */}
+          {/* Progress Bar */}
           <div className="h-1 w-full bg-white/5 relative">
             <motion.div 
               initial={{ width: 0 }}
@@ -516,7 +581,7 @@ export const LiveExam = () => {
             />
           </div>
 
-          {/* Main Quiz Layout: Panel + Left Pane */}
+          {/* Main Quiz Layout */}
           <div className="flex flex-col lg:flex-row divide-y lg:divide-y-0 lg:divide-x divide-white/10 flex-1">
             
             {/* Left Question and Answers Content Pane */}
@@ -524,13 +589,10 @@ export const LiveExam = () => {
               
               {activeQuestion ? (
                 <div className="space-y-6">
-                  {/* Top Stats */}
+                  {/* Simplified Top Stats - Dynamic & distraction free */}
                   <div className="flex justify-between items-center">
                     <span className="text-indigo-400 font-bold text-sm sm:text-base">
-                      Question {activeQuestionIndex + 1} <span className="text-gray-500 font-normal">of {activeSubject.questions.length}</span>
-                    </span>
-                    <span className="text-[10px] bg-white/5 border border-white/10 px-2.5 py-1 rounded-full text-gray-400 font-semibold uppercase">
-                      Marks: {activeQuestion.marks} | Neg: {activeQuestion.negativeMarks}
+                      Question {activeQuestionIndex + 1} <span className="text-gray-500 font-normal">of {activeAttemptSubject.questions.length}</span>
                     </span>
                   </div>
 
@@ -542,11 +604,11 @@ export const LiveExam = () => {
                   {/* Option Buttons */}
                   <div className="grid gap-3 pt-4">
                     {activeQuestion.options.map((opt: string, i: number) => {
-                      const isSelected = answers[flatIndex] === i
+                      const isSelected = answers[activeQuestionIndex] === i
                       return (
                         <motion.button
                           key={i}
-                          onClick={() => selectAnswer(flatIndex, i)}
+                          onClick={() => selectAnswer(activeQuestionIndex, i)}
                           whileHover={{ x: 6 }}
                           className={`w-full text-left p-4 rounded-xl border transition-all duration-300 flex items-center justify-between group ${
                             isSelected 
@@ -586,7 +648,7 @@ export const LiveExam = () => {
                 <div className="flex gap-3">
                   <button
                     type="button"
-                    onClick={() => toggleMarkForReview(flatIndex)}
+                    onClick={() => toggleMarkForReview(activeQuestionIndex)}
                     className={`px-4 py-2 border rounded-xl text-xs font-semibold transition-all ${
                       isQuestionMarked
                         ? 'bg-purple-500/20 border-purple-500 text-purple-300'
@@ -596,7 +658,7 @@ export const LiveExam = () => {
                     {isQuestionMarked ? 'Marked for Review' : 'Mark for Review'}
                   </button>
 
-                  {activeQuestionIndex < activeSubject.questions.length - 1 ? (
+                  {activeQuestionIndex < activeAttemptSubject.questions.length - 1 ? (
                     <button
                       type="button"
                       onClick={() => setActiveQuestionIndex(activeQuestionIndex + 1)}
@@ -604,46 +666,34 @@ export const LiveExam = () => {
                     >
                       Next <ChevronRight className="h-4 w-4" />
                     </button>
-                  ) : activeSubjectIndex < (currentExam.subjects?.length || 0) - 1 ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveSubjectIndex(activeSubjectIndex + 1)
-                        setActiveQuestionIndex(0)
-                      }}
-                      className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
-                    >
-                      Next Subject <Layers className="h-4 w-4 ml-1" />
-                    </button>
                   ) : (
                     <button
                       type="button"
                       onClick={handleFinish}
                       className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
                     >
-                      Finish Assessment <CheckCircle2 className="h-4 w-4 ml-1" />
+                      Finish Module <CheckCircle2 className="h-4 w-4 ml-1" />
                     </button>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Right Question Palette and Section Details Sidebar */}
+            {/* Right Question Palette Sidebar */}
             <div className="w-full lg:w-72 p-6 bg-white/[0.02] flex flex-col text-left space-y-6">
               <div>
-                <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2">Section Instructions</h4>
+                <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2">Module Instructions</h4>
                 <p className="text-xs text-gray-300 leading-relaxed bg-white/5 p-3 rounded-lg border border-white/5">
-                  {activeSubject.instructions || 'Answer all questions listed in this branch. You can jump directly to questions using the palette below.'}
+                  {activeAttemptSubject.instructions || 'Answer all multiple choice questions listed in this section module. Use the palette below to jump directly.'}
                 </p>
               </div>
 
               <div>
-                <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-3">Question Palette ({activeSubject.name})</h4>
+                <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-3">Question Palette</h4>
                 <div className="grid grid-cols-5 gap-2">
-                  {activeSubject.questions.map((_: any, idx: number) => {
-                    const qFlatIdx = getFlatQuestionIndex(activeSubjectIndex, idx)
-                    const isAnswered = answers[qFlatIdx] !== undefined
-                    const isMarked = !!markedForReview[qFlatIdx]
+                  {activeAttemptSubject.questions.map((_: any, idx: number) => {
+                    const isAnswered = answers[idx] !== undefined
+                    const isMarked = !!markedForReview[idx]
                     const isCur = idx === activeQuestionIndex
 
                     return (
@@ -667,7 +717,7 @@ export const LiveExam = () => {
                 </div>
               </div>
 
-              {/* Status Indicators Legend */}
+              {/* Palette Legend */}
               <div className="border-t border-white/5 pt-4 space-y-2 text-[10px] text-gray-400">
                 <h5 className="uppercase font-bold tracking-wider mb-2">Palette Legend</h5>
                 <div className="flex items-center gap-2">
@@ -707,7 +757,7 @@ export const LiveExam = () => {
         </div>
       </div>
 
-      {/* Violation Overlay Warning Strike Modal */}
+      {/* Violation Strike Modal Overlay */}
       <AnimatePresence>
         {showViolationWarning && (
           <motion.div

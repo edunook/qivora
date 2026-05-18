@@ -4,6 +4,7 @@ import { AuthLayout } from './components/layout/AuthLayout'
 import { Home } from './pages/Home'
 import { ExploreExams } from './pages/ExploreExams'
 import { CreateExam } from './pages/CreateExam'
+import { ManageSubjects } from './pages/ManageSubjects'
 import { LiveExam } from './pages/LiveExam'
 import { Dashboard } from './pages/Dashboard'
 import { ResultDashboard } from './pages/ResultDashboard'
@@ -24,6 +25,7 @@ function App() {
             <Route index element={<Home />} />
             <Route path="explore" element={<ExploreExams />} />
             <Route path="create" element={<CreateExam />} />
+            <Route path="manage-subjects/:id" element={<ManageSubjects />} />
             <Route path="exam/:id" element={<LiveExam />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="result/:id" element={<ResultDashboard />} />

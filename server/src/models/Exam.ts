@@ -63,6 +63,10 @@ const SubjectSchema = new mongoose.Schema({
   totalMarks: { type: Number, default: 0 },
   passingMarks: { type: Number, default: 0 },
   instructions: { type: String, default: '' },
+  startDate: { type: String, default: '' },
+  startTime: { type: String, default: '' },
+  endDate: { type: String, default: '' },
+  endTime: { type: String, default: '' },
   questions: [QuestionSchema],
   quizzes: [QuizSchema],
 })

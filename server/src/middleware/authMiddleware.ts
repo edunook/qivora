@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken'
 import { User } from '../models/User'
 
 export const protect = async (req: Request, res: Response, next: NextFunction) => {
-  let token
+  let token: string | undefined
 
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     try {
@@ -17,18 +17,16 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
       const user = await User.findById(decoded.id).select('-password')
       
       if (!user) {
-        throw new Error('User not found')
+        return res.status(401).json({ message: 'Not authorized, user not found' })
       }
 
       ;(req as any).user = user
-      next()
+      return next()
     } catch (error) {
       console.error('Auth Error:', error)
-      res.status(401).json({ message: 'Not authorized' })
+      return res.status(401).json({ message: 'Not authorized, token invalid' })
     }
   }
 
-  if (!token) {
-    res.status(401).json({ message: 'Not authorized, no token' })
-  }
+  return res.status(401).json({ message: 'Not authorized, no token' })
 }

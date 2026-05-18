@@ -31,10 +31,42 @@ interface Exam {
   negativeMarking?: boolean
   negativeMarkValue?: number
   randomizeQuestions?: boolean
-  resultsReleaseType?: string
+  resultsReleaseType?: 'immediate' | 'scheduled' | 'manual'
   resultsReleaseDate?: string
+  resultsReleaseTime?: string
   resultsReleased?: boolean
   createdAt: string
+  instructions?: string
+  banner?: string
+  category?: string
+  thumbnail?: string
+  startDate?: string
+  startTime?: string
+  endDate?: string
+  endTime?: string
+  fullscreenMode?: boolean
+  detectTabSwitching?: boolean
+  detectMinimizeEvents?: boolean
+  disableCopy?: boolean
+  disablePaste?: boolean
+  disableRightClick?: boolean
+  autoSubmitOnViolations?: boolean
+  violationLimit?: number
+  webcamMonitoring?: boolean
+  suspiciousActivityLogging?: boolean
+  resultType?: string
+  resultTheme?: string
+  resultColors?: string[]
+  resultLayoutStyle?: string
+  showRank?: boolean
+  showPercentage?: boolean
+  showCorrectAnswers?: boolean
+  showWrongAnswers?: boolean
+  showExplanations?: boolean
+  downloadableResult?: boolean
+  printableResult?: boolean
+  leaderboardVisibility?: boolean
+  subjects?: any[]
 }
 
 interface ExamState {
@@ -45,6 +77,7 @@ interface ExamState {
   isSuccess: boolean
   message: string
   createExam: (examData: any) => Promise<void>
+  updateExam: (id: string, examData: any) => Promise<void>
   getPublicExams: (subject?: string) => Promise<void>
   getExamById: (id: string) => Promise<void>
   reset: () => void
@@ -85,6 +118,39 @@ export const useExamStore = create<ExamState>((set) => ({
         error.toString()
       
       // Auto-logout on 401 (stale/invalid token)
+      if (error.response && error.response.status === 401) {
+        useAuthStore.getState().logout()
+      }
+      
+      set({ isError: true, message, isLoading: false, isSuccess: false })
+    }
+  },
+
+  updateExam: async (id, examData) => {
+    set({ isLoading: true })
+    try {
+      const token = useAuthStore.getState().user?.token
+      const config = {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+      
+      const response = await axios.put(`${API_URL}${id}`, examData, config)
+      
+      set((state) => ({ 
+        exams: state.exams.map((e) => e._id === id ? response.data : e),
+        currentExam: response.data,
+        isSuccess: true, 
+        isLoading: false, 
+        isError: false 
+      }))
+    } catch (error: any) {
+      const message =
+        (error.response && error.response.data && error.response.data.message) ||
+        error.message ||
+        error.toString()
+      
       if (error.response && error.response.status === 401) {
         useAuthStore.getState().logout()
       }

@@ -24,10 +24,17 @@ export const SignIn = () => {
     resolver: zodResolver(signInSchema)
   })
 
+  // Clear stale errors when mounting login page
   useEffect(() => {
-    if (isSuccess || user) {
+    reset()
+  }, [reset])
+
+  useEffect(() => {
+    if (isSuccess) {
       navigate('/dashboard')
       reset()
+    } else if (user) {
+      navigate('/dashboard')
     }
   }, [isSuccess, user, navigate, reset])
 

@@ -7,7 +7,7 @@ import { Exam } from '../models/Exam'
 // @access  Private
 export const submitResult = async (req: Request, res: Response) => {
   try {
-    const { examId, answers, timeTaken, cheated, violationsCount } = req.body
+    const { examId, answers, timeTaken, cheated, violationsCount, subjectName } = req.body
     const userId = (req as any).user.id
 
     // Fetch the exam to perform secure server-side grade calculation
@@ -21,8 +21,63 @@ export const submitResult = async (req: Request, res: Response) => {
     let penalty = 0
     const subjectWiseAnalysis: any = {}
 
-    // 1. Process scoring based on Exam -> Subject -> Questions hierarchy
-    if (exam.subjects && exam.subjects.length > 0) {
+    // 1. Process scoring ONLY for the specified subject section if provided
+    if (subjectName) {
+      const subj = exam.subjects.find((s: any) => s.name === subjectName)
+      if (!subj) {
+        return res.status(400).json({ message: 'Subject section not found in exam' })
+      }
+
+      subj.questions.forEach((q: any, i: number) => {
+        totalQuestions++
+        const ansKey = String(i)
+        const chosenAns = answers[ansKey] !== undefined ? Number(answers[ansKey]) : -1
+        const isCorrect = chosenAns === q.correctOption
+
+        const qMarks = q.marks !== undefined ? Number(q.marks) : 1
+        
+        if (!subjectWiseAnalysis[subjectName]) {
+          subjectWiseAnalysis[subjectName] = {
+            correct: 0,
+            total: 0,
+            score: 0,
+            maxScore: 0,
+            percentage: 0,
+            grade: 'F',
+            passed: false,
+            timeSpent: timeTaken,
+          }
+        }
+
+        subjectWiseAnalysis[subjectName].total++
+        subjectWiseAnalysis[subjectName].maxScore += qMarks
+
+        if (isCorrect) {
+          correct++
+          subjectWiseAnalysis[subjectName].correct++
+          subjectWiseAnalysis[subjectName].score += qMarks
+        } else {
+          if (exam.negativeMarking) {
+            const qPenalty = q.negativeMarks !== undefined ? Number(q.negativeMarks) : (exam.negativeMarkValue || 0.25)
+            subjectWiseAnalysis[subjectName].score = Math.max(0, subjectWiseAnalysis[subjectName].score - qPenalty)
+            penalty += qPenalty
+          }
+        }
+      })
+
+      const sAnalysis = subjectWiseAnalysis[subjectName]
+      sAnalysis.percentage = sAnalysis.maxScore > 0 ? Math.round((sAnalysis.score / sAnalysis.maxScore) * 100) : 0
+      const passingThreshold = subj.passingMarks || Math.round(sAnalysis.maxScore * 0.5)
+      sAnalysis.passed = sAnalysis.score >= passingThreshold
+
+      let sGrade = 'F'
+      if (sAnalysis.percentage >= 90) sGrade = 'A+'
+      else if (sAnalysis.percentage >= 80) sGrade = 'A'
+      else if (sAnalysis.percentage >= 70) sGrade = 'B'
+      else if (sAnalysis.percentage >= 60) sGrade = 'C'
+      else if (sAnalysis.percentage >= 50) sGrade = 'D'
+      sAnalysis.grade = sGrade
+    } else if (exam.subjects && exam.subjects.length > 0) {
       let flatIndex = 0
       exam.subjects.forEach((subj: any) => {
         const subjName = subj.name || 'General'
@@ -162,6 +217,7 @@ export const submitResult = async (req: Request, res: Response) => {
     const result = await ExamResult.create({
       user: userId,
       exam: examId,
+      subjectName: subjectName || '',
       answers,
       score: correct,
       totalQuestions,
@@ -333,3 +389,18 @@ export const getResultById = async (req: Request, res: Response) => {
     res.status(500).json({ message: error.message || 'Server Error' })
   }
 }
+
+// @desc    Get user results for a specific exam
+// @route   GET /api/results/exam/:examId
+// @access  Private
+export const getResultsByExam = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id
+    const { examId } = req.params
+    const results = await ExamResult.find({ user: userId, exam: examId })
+    res.status(200).json(results)
+  } catch (error: any) {
+    res.status(500).json({ message: error.message || 'Server Error' })
+  }
+}
+

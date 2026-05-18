@@ -12,6 +12,10 @@ const ExamResultSchema = new mongoose.Schema(
       ref: 'Exam',
       required: true,
     },
+    subjectName: {
+      type: String,
+      default: '',
+    },
     answers: {
       type: Map,
       of: Number,

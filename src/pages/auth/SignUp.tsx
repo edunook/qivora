@@ -33,10 +33,17 @@ export const SignUp = () => {
     resolver: zodResolver(signUpSchema)
   })
 
+  // Clear stale errors when mounting signup page
   useEffect(() => {
-    if (isSuccess || user) {
+    reset()
+  }, [reset])
+
+  useEffect(() => {
+    if (isSuccess) {
       navigate('/dashboard')
       reset()
+    } else if (user) {
+      navigate('/dashboard')
     }
   }, [isSuccess, user, navigate, reset])
 

@@ -1,13 +1,12 @@
 import { motion } from 'framer-motion'
 import { cn } from '../../lib/utils'
 
-
-
 export const PremiumButton = ({ 
   variant = 'primary', 
   size = 'md', 
   className, 
   children, 
+  disabled,
   ...props 
 }: any) => {
   const variants = {
@@ -25,18 +24,20 @@ export const PremiumButton = ({
 
   return (
     <motion.button
-      whileHover={{ scale: 1.02, y: -2 }}
-      whileTap={{ scale: 0.98 }}
+      whileHover={disabled ? {} : { scale: 1.02, y: -2 }}
+      whileTap={disabled ? {} : { scale: 0.98 }}
+      disabled={disabled}
       className={cn(
         'relative inline-flex items-center justify-center rounded-full transition-all duration-300',
         variants[variant as keyof typeof variants] || variants.primary,
         sizes[size as keyof typeof sizes] || sizes.md,
+        disabled && 'opacity-50 cursor-not-allowed pointer-events-none',
         className
       )}
       {...props}
     >
       <span className="relative z-10">{children}</span>
-      {variant === 'primary' && (
+      {variant === 'primary' && !disabled && (
         <div className="absolute inset-0 rounded-full bg-gradient-to-r from-primary to-accent-purple opacity-0 hover:opacity-100 transition-opacity duration-300" />
       )}
     </motion.button>

@@ -1,73 +1,123 @@
-# React + TypeScript + Vite
+# Qivora
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Qivora is a production-focused full-stack examination ecosystem built with:
 
-Currently, two official plugins are available:
+- Frontend: React, Vite, Tailwind CSS, Framer Motion, React Router, Zustand, React Hook Form, Zod, Axios, TanStack Query
+- Backend: Node.js, Express, MongoDB, Mongoose, JWT, bcryptjs-compatible secure password hashing, Helmet, Rate Limit, CORS, dotenv, cookie-parser
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Features
 
-## React Compiler
+- JWT auth with refresh cookie flow
+- Role-based access for students, teachers, organizations, and admins
+- Real exam builder with `Exam -> Subjects -> Questions`
+- Scheduling with independent result release controls
+- Secure attempt flow with fullscreen, blur, tab-switch, and clipboard violation logging
+- Attempt autosave and one-attempt enforcement
+- Unified result generation with subject analytics, ranks, GPA, grades, accuracy, strengths, and weaknesses
+- Reviews, ratings, creator profiles, follow system, trending/public exam discovery
+- Admin moderation for users and exams
+- In-app AI assistant wired for Groq and Gemini API keys
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Structure
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```text
+frontend/
+backend/
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Local setup
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+1. Copy environment templates:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 ```
+
+2. Fill in:
+
+- `backend/.env`
+  - `MONGODB_URI`
+  - `JWT_ACCESS_SECRET`
+  - `JWT_REFRESH_SECRET`
+  - `CLIENT_URL`
+  - Optional SMTP values for forgot-password email
+  - Optional `GROQ_API_KEY`
+  - Optional `GEMINI_API_KEY`
+- `frontend/.env`
+  - `VITE_API_BASE_URL`
+
+3. Install and run:
+
+```bash
+npm install
+npm run dev
+```
+
+4. Production builds:
+
+```bash
+npm run build
+```
+
+## Deployment
+
+### Frontend on Vercel
+
+- Root directory: `frontend`
+- Build command: `npm run build`
+- Output directory: `dist`
+- Env:
+  - `VITE_API_BASE_URL=https://your-backend-domain/api`
+
+### Backend on Render
+
+- Root directory: `backend`
+- Build command: `npm install && npm run build`
+- Start command: `npm run start`
+- Env:
+  - `NODE_ENV=production`
+  - `CLIENT_URL=https://your-frontend-domain`
+  - `MONGODB_URI=...`
+  - `JWT_ACCESS_SECRET=...`
+  - `JWT_REFRESH_SECRET=...`
+  - `COOKIE_SECURE=true`
+  - Optional SMTP + AI keys
+
+### MongoDB Atlas
+
+- Create a cluster
+- Add the backend host IP/network access
+- Put the Atlas connection string into `MONGODB_URI`
+
+## API overview
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `POST /api/auth/forgot-password`
+- `POST /api/auth/reset-password`
+- `GET /api/exams`
+- `GET /api/exams/:examId`
+- `POST /api/exams`
+- `POST /api/exams/creator/:creatorId/follow`
+- `POST /api/attempts/:examId/start`
+- `PUT /api/attempts/:examId/save`
+- `POST /api/attempts/:examId/submit`
+- `POST /api/attempts/:examId/violations`
+- `GET /api/results`
+- `GET /api/results/:resultId`
+- `POST /api/results/publish/:examId`
+- `GET /api/reviews/:examId`
+- `POST /api/reviews/:examId`
+- `GET /api/admin/dashboard`
+- `GET /api/notifications`
+- `POST /api/ai/assistant`
+
+## Notes
+
+- Clipboard, blur, tab-switch, and fullscreen protections are implemented only with browser-supported techniques.
+- PDF download/printing is modeled in result configuration and the browser print flow can be enabled from the result page extension layer if you want a dedicated export next.
+- Old scaffold files from the previous single-root prototype remain in the repo, but the deployable app now lives in `frontend/` and `backend/`.

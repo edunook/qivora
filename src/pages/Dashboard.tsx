@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { GlassCard } from '../components/ui/GlassCard'
-import { Award, History, TrendingUp, BookOpen, Clock, Target, ChevronRight, Loader2, Plus, ArrowRight } from 'lucide-react'
+import { Award, History, TrendingUp, BookOpen, Clock, Target, ChevronRight, Loader2, Plus, ArrowRight, Settings } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
@@ -202,11 +202,28 @@ export const Dashboard = () => {
             {myExams.length > 0 && (
               <div className="mt-2 border-t border-white/5 pt-4">
                 <div className="text-[10px] text-white/40 uppercase tracking-wider font-bold mb-2">My Created Exams ({myExams.length})</div>
-                <div className="space-y-2 max-h-[120px] overflow-y-auto pr-1 scrollbar-thin">
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin">
                   {myExams.map((exam) => (
-                    <div key={exam._id} className="flex justify-between items-center text-xs">
-                      <span className="text-white/80 font-medium truncate max-w-[150px]">{exam.title}</span>
-                      <span className="text-white/40 shrink-0">{exam.attempts} attempts</span>
+                    <div key={exam._id} className="bg-white/5 border border-white/5 p-3 rounded-xl flex flex-col gap-3 group/item">
+                      <div className="flex justify-between items-start">
+                        <div className="flex flex-col">
+                          <span className="text-white/90 font-bold text-sm truncate max-w-[150px]">{exam.title}</span>
+                          <span className="text-[10px] text-white/40 uppercase tracking-widest">{exam.attempts} attempts</span>
+                        </div>
+                        <Link 
+                          to={`/create?edit=${exam._id}`}
+                          className="p-1.5 rounded-lg bg-white/5 hover:bg-primary/20 text-white/60 hover:text-primary transition-colors cursor-pointer"
+                          title="Edit Exam Config"
+                        >
+                          <Settings className="w-4 h-4" />
+                        </Link>
+                      </div>
+                      <Link 
+                        to={`/manage-subjects/${exam._id}`}
+                        className="w-full py-2 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 font-bold text-xs text-center border border-indigo-500/20 transition-all flex items-center justify-center gap-2"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Manage Subjects
+                      </Link>
                     </div>
                   ))}
                 </div>
