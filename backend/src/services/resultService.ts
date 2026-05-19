@@ -19,16 +19,16 @@ export async function computeAndStoreResult(attemptId: string) {
   }
 
   const answerMap: AnswerMap = new Map(
-    (attempt.answers as any[]).map((answer: any) => [String(answer.questionId), { selectedOption: answer.selectedOption }])
+    (attempt.answers as unknown as any[]).map((answer: any) => [String(answer.questionId), { selectedOption: answer.selectedOption }])
   );
 
-  const subjectStats = (exam.subjects as any[]).map((subject: any) => {
+  const subjectStats = (exam.subjects as unknown as any[]).map((subject: any) => {
     let scoredMarks = 0;
     let correctAnswers = 0;
     let wrongAnswers = 0;
     let unattemptedAnswers = 0;
 
-    (subject.questions as any[]).forEach((question: any) => {
+    (subject.questions as unknown as any[]).forEach((question: any) => {
       const answer = answerMap.get(String(question._id));
       if (answer?.selectedOption === undefined || answer.selectedOption === null) {
         unattemptedAnswers += 1;
@@ -59,7 +59,7 @@ export async function computeAndStoreResult(attemptId: string) {
     };
   });
 
-  const totalMarks = (exam.subjects as any[]).reduce((sum: number, subject: any) => sum + subject.totalMarks, 0);
+  const totalMarks = (exam.subjects as unknown as any[]).reduce((sum: number, subject: any) => sum + subject.totalMarks, 0);
   const scoredMarks = subjectStats.reduce((sum: number, subject: any) => sum + subject.scoredMarks, 0);
   const correctAnswers = subjectStats.reduce((sum: number, subject: any) => sum + subject.correctAnswers, 0);
   const wrongAnswers = subjectStats.reduce((sum: number, subject: any) => sum + subject.wrongAnswers, 0);
@@ -67,8 +67,8 @@ export async function computeAndStoreResult(attemptId: string) {
   const overallPercentage = totalMarks > 0 ? (Math.max(0, scoredMarks) / totalMarks) * 100 : 0;
   const passed = subjectStats.every((subject: any) => subject.passed);
 
-  const answersBreakdown = (exam.subjects as any[]).flatMap((subject: any) =>
-    (subject.questions as any[]).map((question: any) => {
+  const answersBreakdown = (exam.subjects as unknown as any[]).flatMap((subject: any) =>
+    (subject.questions as unknown as any[]).map((question: any) => {
       const answer = answerMap.get(String(question._id));
       const isCorrect = answer?.selectedOption === question.correctAnswer;
       return {

@@ -38,8 +38,8 @@ export const startAttempt = asyncHandler(async (req: Request & { user?: { id: st
       snapshot: {
         currentSubjectIndex: 0,
         currentQuestionIndex: 0,
-        remainingSeconds: exam.subjects.reduce((sum, subject) => sum + subject.durationMinutes * 60, 0),
-        subjectRemainingSeconds: exam.subjects.reduce<Record<string, number>>((acc, subject) => {
+        remainingSeconds: (exam.subjects as unknown as any[]).reduce((sum: number, subject: any) => sum + subject.durationMinutes * 60, 0),
+        subjectRemainingSeconds: (exam.subjects as unknown as any[]).reduce<Record<string, number>>((acc: Record<string, number>, subject: any) => {
           acc[String(subject._id)] = subject.durationMinutes * 60;
           return acc;
         }, {})
@@ -90,7 +90,7 @@ export const saveAttempt = asyncHandler(async (req: Request & { user?: { id: str
   const now = new Date();
 
   for (const answer of req.body.answers || []) {
-    const subject = exam.subjects.find((s) => String(s._id) === String(answer.subjectId));
+    const subject = (exam.subjects as unknown as any[]).find((s: any) => String(s._id) === String(answer.subjectId));
     if (subject) {
       let isAvailable = true;
       if (subject.startDate && subject.startTime) {
@@ -145,7 +145,7 @@ export const submitAttempt = asyncHandler(async (req: Request & { user?: { id: s
   const now = new Date();
 
   for (const answer of req.body.answers || []) {
-    const subject = exam.subjects.find((s) => String(s._id) === String(answer.subjectId));
+    const subject = (exam.subjects as unknown as any[]).find((s: any) => String(s._id) === String(answer.subjectId));
     if (subject) {
       let isAvailable = true;
       if (subject.startDate && subject.startTime) {

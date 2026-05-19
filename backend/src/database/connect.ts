@@ -7,7 +7,7 @@ export async function connectDatabase() {
   try {
     await mongoose.connect(env.MONGODB_URI, {
       autoIndex: env.NODE_ENV !== "production"
-    });
+    } as any);
     console.log("🚀 Connected to MongoDB successfully.");
   } catch (error: any) {
     if (env.NODE_ENV !== "production") {

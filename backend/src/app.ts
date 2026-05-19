@@ -33,7 +33,7 @@ app.use(
   })
 );
 
-app.get("/api/health", (_req, res) => {
+app.get("/api/health", (_req: any, res: any) => {
   res.json({ success: true, message: "Qivora API is healthy" });
 });
 
