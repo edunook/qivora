@@ -29,9 +29,7 @@ export function AppShell() {
           className={`${open ? "translate-x-0" : "-translate-x-full"} fixed inset-y-0 left-0 z-40 w-72 border-r border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] p-6 transition lg:static lg:w-auto lg:translate-x-0 lg:bg-transparent`}
         >
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-cyan-500 text-white">
-              <ShieldCheck className="h-6 w-6" />
-            </div>
+            <img src="/logo.jpg" alt="Qivora Logo" className="h-12 w-12 rounded-2xl object-cover border border-white/10" />
             <div>
               <p className="text-lg font-bold">Qivora</p>
               <p className="text-xs uppercase tracking-[0.3em] text-cyan-300">Examination OS</p>
